@@ -2,6 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Burner List</title>
     <style>
         :root {
@@ -34,7 +35,7 @@
         .header-title { display: flex; align-items: center; gap: 15px; }
         h1 { margin: 0; font-size: 30px; letter-spacing: 1px;} 
 
-        .burn-btn { background-color: var(--burn-color); color: white; border: none; padding: 12px 30px; border-radius: 8px; font-size: 20px; font-weight: bold; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 10px; } 
+        .burn-btn { background-color: var(--burn-color); color: white; border: none; padding: 12px 30px; border-radius: 8px; font-size: 20px; font-weight: bold; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 10px; } 
         .burn-btn:hover { background-color: #c0392b; transform: translateY(-1px); }
 
         .board { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: min-content 1fr; gap: 30px; width: 100%; max-width: 1500px; min-height: 750px; } 
@@ -65,7 +66,6 @@
         .main-project-input:focus { border: 1px solid var(--burn-color) !important; background-color: #fff; }
         .back-project-input { font-size: 18px !important; font-weight: bold; text-align: center; background-color: #f8f9fa; margin-bottom: 0 !important; width: 100%; padding: 15px; border: 1px solid var(--border-color); border-radius: 8px; box-sizing: border-box; font-family: inherit; outline: none; transition: border-color 0.2s;} 
 
-        /* 统一字号：提升到了 18px */
         .step-label { font-size: 18px; color: var(--text-muted); margin-bottom: 12px; display: block; } 
         
         ul { list-style: none; padding: 0 4px 0 0; margin: 0; flex-grow: 1; overflow-y: auto; }
@@ -80,7 +80,6 @@
             border-radius: 6px; transition: background 0.2s, box-shadow 0.1s;
             cursor: grab;
         } 
-        /* 拖拽状态视觉反馈 */
         li.task-item.dragging { opacity: 0.4; background-color: var(--highlight-bg); }
         
         input[type="checkbox"] { margin-top: 5px; margin-right: 15px; cursor: pointer; width: 20px; height: 20px; flex-shrink: 0; } 
@@ -92,64 +91,99 @@
         .icon-btn { background: none; border: none; cursor: pointer; color: var(--text-muted); display: flex; align-items: center; padding: 2px; }
         .icon-btn:hover { color: var(--burn-color); }
         .icon-btn.promote:hover { color: var(--action-color); }
-        .icon-btn.edit:hover { color: #2ecc71; } /* 编辑按钮悬停变绿 */
+        .icon-btn.edit:hover { color: #2ecc71; } 
         
         svg { width: 25px; height: 25px; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; fill: none; } 
 
-        /* 极简底部新增样式 */
         .add-task-wrap { display: flex; align-items: center; padding: 8px 0; margin-top: 5px; opacity: 0.7; transition: opacity 0.2s; }
         .add-task-wrap:hover, .add-task-wrap:focus-within { opacity: 1; }
         .add-icon { width: 22px; height: 22px; margin-right: 15px; stroke: currentColor; stroke-width: 2; color: var(--text-muted); flex-shrink: 0;}
         .add-task-input { border: none; background: transparent; flex-grow: 1; width: 100%; outline: none; font-family: inherit; font-size: 18px; color: var(--text-main); padding: 0; }
         .add-task-input::placeholder { color: var(--text-muted); }
 
-        /* 行内编辑样式：强制宽度100%，加宽 Padding */
         .inline-edit-input { 
-            flex-grow: 1; 
-            width: 100%; /* 解决某些浏览器下不自动撑满的问题 */
-            font-size: 18px; 
-            font-family: inherit; 
-            border: 1px solid var(--burn-color); 
-            border-radius: 6px; 
-            padding: 6px 12px; /* 加宽内边距，让框看起来更舒展 */
-            outline: none; 
-            margin-right: 10px; 
-            box-sizing: border-box;
-            transition: box-shadow 0.2s;
+            flex-grow: 1; width: 100%; font-size: 18px; font-family: inherit; 
+            border: 1px solid var(--burn-color); border-radius: 6px; 
+            padding: 6px 12px; outline: none; margin-right: 10px; box-sizing: border-box; transition: box-shadow 0.2s;
         }
-        .inline-edit-input:focus {
-            box-shadow: 0 0 0 2px rgba(231, 76, 60, 0.1);
-        }
+        .inline-edit-input:focus { box-shadow: 0 0 0 2px rgba(231, 76, 60, 0.1); }
 
-        /* 模态弹窗 */
+        /* ======== 撤回提示 Toast ======== */
+        .toast-container {
+            position: fixed; top: 30px; left: 50%; transform: translateX(-50%);
+            z-index: 9999; display: flex; flex-direction: column; gap: 10px; pointer-events: none; 
+        }
+        .toast-msg {
+            background: #ffffff; color: var(--text-main); border-left: 4px solid var(--burn-color); 
+            padding: 14px 24px; border-radius: 8px; font-size: 16px; 
+            display: flex; align-items: center; gap: 20px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1); pointer-events: auto;
+            animation: toastSlideDown 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .toast-btn {
+            background: var(--highlight-bg); border: 1px solid rgba(231, 76, 60, 0.2); color: var(--burn-color);
+            padding: 6px 16px; border-radius: 6px; font-size: 15px; cursor: pointer; font-weight: bold; transition: all 0.2s; font-family: inherit;
+        }
+        .toast-btn:hover { background: var(--burn-color); color: #fff; }
+        @keyframes toastSlideDown { from { transform: translateY(-30px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+        /* ======== 模态弹窗 ======== */
         .modal-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(44, 62, 80, 0.6); backdrop-filter: blur(4px); 
-            display: flex; justify-content: center; 
-            align-items: center; padding-bottom: 12vh; box-sizing: border-box;
+            display: flex; justify-content: center; align-items: center; padding-bottom: 12vh; box-sizing: border-box;
             z-index: 1000; opacity: 0; visibility: hidden; transition: all 0.25s ease;
         }
         .modal-overlay.active { opacity: 1; visibility: visible; }
-        
         .modal-box {
-            background: #fff; border-radius: 15px; width: 425px; padding: 35px; 
-            box-shadow: 0 15px 35px rgba(0,0,0,0.2);
-            transform: translateY(20px); transition: transform 0.25s ease;
+            background: #fff; border-radius: 15px; width: 425px; padding: 35px; box-shadow: 0 15px 35px rgba(0,0,0,0.2);
+            transform: translateY(20px); transition: transform 0.25s ease; max-width: 90vw;
         }
         .modal-overlay.active .modal-box { transform: translateY(0); }
-        
         .modal-title { font-size: 22px; font-weight: bold; margin-bottom: 15px; color: var(--text-main); display: flex; align-items: center; gap: 10px;} 
         .modal-message { font-size: 18px; color: var(--text-muted); line-height: 1.6; margin-bottom: 30px; white-space: pre-wrap; } 
-        
         .modal-actions { display: flex; justify-content: flex-end; gap: 15px; }
         .modal-btn { padding: 10px 22px; border-radius: 8px; font-size: 18px; cursor: pointer; border: none; font-weight: bold; transition: background 0.2s;} 
         .modal-btn.cancel { background: #f1f2f6; color: var(--text-main); }
         .modal-btn.cancel:hover { background: #dfe4ea; }
         .modal-btn.confirm { background: var(--burn-color); color: #fff; }
         .modal-btn.confirm:hover { background: #c0392b; }
+
+        /* ========================================================
+           新增：移动端响应式适配 (手机 & 小平板)
+           ======================================================== */
+        @media (max-width: 850px) {
+            body { padding: 15px; height: auto; min-height: 100vh; overflow: auto; } /* 允许系统滚动 */
+            
+            .header { flex-direction: column; gap: 20px; align-items: stretch; margin-bottom: 20px; }
+            .header-title { justify-content: center; }
+            
+            .board { 
+                display: flex; flex-direction: column; gap: 20px; 
+                min-height: auto; width: 100%; 
+            }
+            
+            .column { padding: 20px; min-height: 250px; }
+            
+            /* 调整头部结构，防止按钮折行 */
+            .column-header { flex-direction: column; align-items: flex-start; gap: 15px; height: auto; }
+            .header-actions { width: 100%; justify-content: flex-end; }
+
+            /* 触屏适配：将操作按钮默认显示，因为手机没有Hover */
+            .action-btns { opacity: 1; }
+            
+            /* 去除拖拽样式暗示，因为手机端拖拽原生不支持 */
+            li.task-item { cursor: default; }
+            
+            /* Toast适配小屏幕 */
+            .toast-msg { flex-direction: column; gap: 10px; align-items: stretch; text-align: center; font-size: 15px; width: 90vw; box-sizing: border-box; }
+            .toast-btn { width: 100%; }
+        }
     </style>
 </head>
 <body>
+
+    <div id="toast-container" class="toast-container"></div>
 
     <div class="header">
         <div class="header-title">
@@ -223,11 +257,7 @@
     <script>
         let rawData = localStorage.getItem('burnerListData');
         let oldData = rawData ? JSON.parse(rawData) : null;
-        let data = {
-            front: { title: "", steps: [] },
-            back: { title: "", steps: [] },
-            sink: []
-        };
+        let data = { front: { title: "", steps: [] }, back: { title: "", steps: [] }, sink: [] };
 
         try {
             if (oldData && oldData.front && typeof oldData.front.title !== 'undefined') {
@@ -247,6 +277,50 @@
         let pendingCallback = null;
         let dragInfo = { col: null, index: null };
         let editingInfo = { col: null, index: null };
+        
+        let undoStack = [];
+        let toastTimeout = null;
+
+        function pushHistory() {
+            undoStack.push(JSON.stringify(data));
+            if (undoStack.length > 30) undoStack.shift(); 
+        }
+
+        function undoAction() {
+            if (undoStack.length === 0) return;
+            data = JSON.parse(undoStack.pop());
+            render();
+            saveData();
+            hideToast();
+        }
+
+        function showToast(message) {
+            const container = document.getElementById('toast-container');
+            container.innerHTML = `
+                <div class="toast-msg">
+                    <span>${message}</span>
+                    <button class="toast-btn" onclick="undoAction()">撤回 (Ctrl+Z)</button>
+                </div>
+            `;
+            clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(hideToast, 5000); 
+        }
+
+        function hideToast() {
+            document.getElementById('toast-container').innerHTML = '';
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+                const isInputFocused = document.activeElement && document.activeElement.tagName === 'INPUT';
+                if (!isInputFocused || document.getElementById('toast-container').innerHTML !== '') {
+                    if (undoStack.length > 0) {
+                        e.preventDefault();
+                        undoAction();
+                    }
+                }
+            }
+        });
 
         function showModalConfig(title, message, isAlert, callback) {
             document.getElementById('modal-title-text').innerText = title;
@@ -306,6 +380,7 @@
                 const li = document.createElement('li');
                 li.className = `task-item ${task.done ? 'completed' : ''}`;
                 
+                // 只有桌面端才会响应拖拽
                 li.draggable = true;
                 li.ondragstart = (e) => handleDragStart(e, col, index);
                 li.ondragover = (e) => handleDragOver(e);
@@ -426,6 +501,8 @@
 
             if (sourceCol === targetCol && sourceIndex === insertIndex) return;
 
+            pushHistory();
+
             let sourceArr = sourceCol === 'front' ? data.front.steps : data.sink;
             let targetArr = targetCol === 'front' ? data.front.steps : data.sink;
 
@@ -466,9 +543,16 @@
         }
 
         function deleteTask(col, index) {
+            pushHistory();
+            
+            // 修复：确保从正确的数组中取值
+            let taskName = col === 'front' ? data.front.steps[index].text : data.sink[index].text;
+            
             if(col === 'front') data.front.steps.splice(index, 1);
             if(col === 'sink') data.sink.splice(index, 1);
+            
             render();
+            showToast(`已删除: ${taskName}`);
         }
 
         function swapTasks() {
@@ -486,10 +570,13 @@
                 '完结当前项目', 
                 '确定主项目已全部完成？\n执行后，次任务将自动拉取到主任务区。', 
                 () => {
+                    pushHistory();
                     runWithAnimation(['col-front', 'col-back'], () => {
+                        let completedTitle = data.front.title || '核心任务';
                         data.front = JSON.parse(JSON.stringify(data.back || {title:"", steps:[]}));
                         data.back = { title: "", steps: [] }; 
                         render();
+                        showToast(`已完结: ${completedTitle}`);
                     });
                 }
             );
@@ -512,9 +599,11 @@
                 '燃尽今日', 
                 '确定要清空所有数据，彻底开启新的一天吗？\n该操作不可逆，将删除所有未完成的步骤。', 
                 () => {
+                    pushHistory();
                     runWithAnimation(['col-front', 'col-back', 'col-sink'], () => {
                         data = { front: { title: "", steps: [] }, back: { title: "", steps: [] }, sink: [] };
                         render();
+                        showToast(`已开启新的一天，旧数据已燃尽`);
                     });
                 }
             );
