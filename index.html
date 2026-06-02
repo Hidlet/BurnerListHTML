@@ -50,7 +50,8 @@
         .column.is-animating { opacity: 0; transform: scale(0.95); filter: blur(5px); }
 
         #col-front { grid-column: 1 / 2; grid-row: 1 / 3; border: 2px solid var(--burn-color); }
-        #col-back { grid-column: 2 / 3; grid-row: 1 / 2; }
+        /* 优化点：加上 align-self: start 让卡片高度包裹内容，不再因为左侧过长而产生下方巨大留白 */
+        #col-back { grid-column: 2 / 3; grid-row: 1 / 2; align-self: start; }
         #col-sink { grid-column: 2 / 3; grid-row: 2 / 3; }
 
         .column-header { font-size: 22px; font-weight: bold; border-bottom: 2px solid var(--text-main); padding-bottom: 15px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; } 
@@ -77,21 +78,26 @@
         li.task-item { 
             display: flex; align-items: flex-start; margin-bottom: 8px; padding: 6px 0;
             font-size: 18px; line-height: 1.5; word-break: break-all; 
-            border-radius: 6px; transition: background 0.2s, box-shadow 0.1s;
-            cursor: grab;
+            border-radius: 6px; transition: background 0.2s;
         } 
-        li.task-item.dragging { opacity: 0.4; background-color: var(--highlight-bg); }
         
         input[type="checkbox"] { margin-top: 5px; margin-right: 15px; cursor: pointer; width: 20px; height: 20px; flex-shrink: 0; } 
         .completed span { text-decoration: line-through; color: var(--text-muted); }
         
+        /* 交互重构：点击编辑的文本样式 */
+        .task-text {
+            flex-grow: 1; cursor: pointer; padding: 2px 6px; margin: -2px -6px; 
+            border-radius: 6px; transition: background 0.2s;
+        }
+        .task-text:hover { background: rgba(0,0,0,0.04); }
+
         .action-btns { margin-left: auto; display: flex; gap: 8px; opacity: 0; transition: opacity 0.2s; }
         li.task-item:hover .action-btns { opacity: 1; }
 
         .icon-btn { background: none; border: none; cursor: pointer; color: var(--text-muted); display: flex; align-items: center; padding: 2px; }
         .icon-btn:hover { color: var(--burn-color); }
         .icon-btn.promote:hover { color: var(--action-color); }
-        .icon-btn.edit:hover { color: #2ecc71; } 
+        .icon-btn.up:hover { color: #2ecc71; } /* 上移按钮悬停变色 */
         
         svg { width: 25px; height: 25px; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; fill: none; } 
 
@@ -150,32 +156,24 @@
         .modal-btn.confirm:hover { background: #c0392b; }
 
         /* ========================================================
-           新增：移动端响应式适配 (手机 & 小平板)
+           移动端响应式适配 (手机 & 小平板)
            ======================================================== */
         @media (max-width: 850px) {
-            body { padding: 15px; height: auto; min-height: 100vh; overflow: auto; } /* 允许系统滚动 */
+            body { padding: 15px; height: auto; min-height: 100vh; overflow: auto; }
             
             .header { flex-direction: column; gap: 20px; align-items: stretch; margin-bottom: 20px; }
-            .header-title { justify-content: center; }
+            /* 优化点：移动端标题靠左对齐 */
+            .header-title { justify-content: flex-start; }
             
-            .board { 
-                display: flex; flex-direction: column; gap: 20px; 
-                min-height: auto; width: 100%; 
-            }
+            .board { display: flex; flex-direction: column; gap: 20px; min-height: auto; width: 100%; }
+            .column { padding: 20px; min-height: auto; } /* 移动端也去掉固定最小高度 */
             
-            .column { padding: 20px; min-height: 250px; }
-            
-            /* 调整头部结构，防止按钮折行 */
             .column-header { flex-direction: column; align-items: flex-start; gap: 15px; height: auto; }
             .header-actions { width: 100%; justify-content: flex-end; }
 
-            /* 触屏适配：将操作按钮默认显示，因为手机没有Hover */
+            /* 触屏适配：将操作按钮默认显示 */
             .action-btns { opacity: 1; }
             
-            /* 去除拖拽样式暗示，因为手机端拖拽原生不支持 */
-            li.task-item { cursor: default; }
-            
-            /* Toast适配小屏幕 */
             .toast-msg { flex-direction: column; gap: 10px; align-items: stretch; text-align: center; font-size: 15px; width: 90vw; box-sizing: border-box; }
             .toast-btn { width: 100%; }
         }
@@ -216,7 +214,7 @@
             <input type="text" id="front-title" class="main-project-input" placeholder="【输入当前唯一推进的项目】" oninput="updateTitle('front', this.value)" onkeydown="if(event.key==='Enter') this.blur()">
             <span class="step-label">项目拆解步骤：</span>
             
-            <ul id="list-front" ondragover="event.preventDefault()" ondrop="handleEmptyDrop(event, 'front')"></ul>
+            <ul id="list-front"></ul>
         </div>
 
         <div class="column" id="col-back">
@@ -236,7 +234,7 @@
                     <span>杂务水槽</span>
                 </div>
             </div>
-            <ul id="list-sink" ondragover="event.preventDefault()" ondrop="handleEmptyDrop(event, 'sink')"></ul>
+            <ul id="list-sink"></ul>
         </div>
     </div>
 
@@ -246,7 +244,7 @@
                 <svg viewBox="0 0 24 24" style="width:25px;height:25px;color:var(--burn-color);"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
                 <span id="modal-title-text">操作确认</span>
             </div>
-            <div class="modal-message" id="modal-message-text">这里是提示信息...</div>
+            <div class="modal-message" id="modal-message-text"></div>
             <div class="modal-actions">
                 <button class="modal-btn cancel" id="modal-cancel-btn" onclick="closeModal()">取消</button>
                 <button class="modal-btn confirm" id="modal-confirm-btn">确定执行</button>
@@ -275,7 +273,6 @@
         const backTitleInput = document.getElementById('back-title');
 
         let pendingCallback = null;
-        let dragInfo = { col: null, index: null };
         let editingInfo = { col: null, index: null };
         
         let undoStack = [];
@@ -380,18 +377,9 @@
                 const li = document.createElement('li');
                 li.className = `task-item ${task.done ? 'completed' : ''}`;
                 
-                // 只有桌面端才会响应拖拽
-                li.draggable = true;
-                li.ondragstart = (e) => handleDragStart(e, col, index);
-                li.ondragover = (e) => handleDragOver(e);
-                li.ondragleave = (e) => handleDragLeave(e);
-                li.ondrop = (e) => handleDrop(e, col, index);
-                li.ondragend = (e) => handleDragEnd(e);
-
                 const isEditing = (editingInfo.col === col && editingInfo.index === index);
 
                 if (isEditing) {
-                    li.draggable = false; 
                     li.innerHTML = `
                         <input type="checkbox" ${task.done ? 'checked' : ''} disabled style="opacity:0.5; margin-top: 10px;">
                         <input type="text" class="inline-edit-input" value="${task.text}"
@@ -403,16 +391,18 @@
                         if(inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
                     }, 0);
                 } else {
-                    let promoteBtnHtml = col === 'sink' ? `<button class="icon-btn promote" onclick="promoteSinkToBack(${index})" title="提升为次要任务"><svg viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg></button>` : '';
+                    // 新设计：左上角的折线箭头代表“提取/提升”
+                    let promoteBtnHtml = col === 'sink' ? `<button class="icon-btn promote" onclick="promoteSinkToBack(${index})" title="提取为次要任务"><svg viewBox="0 0 24 24"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg></button>` : '';
                     
+                    // 新设计：向上的直箭头代表“上移一格”，排第一的任务不显示
+                    let upBtnHtml = index > 0 ? `<button class="icon-btn up" onclick="moveUp('${col}', ${index})" title="上移一格"><svg viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg></button>` : '';
+
                     li.innerHTML = `
                         <input type="checkbox" ${task.done ? 'checked' : ''} onchange="toggleTask('${col}', ${index})">
-                        <span>${task.text}</span>
+                        <span class="task-text" onclick="startEdit('${col}', ${index})" title="点击编辑">${task.text}</span>
                         <div class="action-btns">
                             ${promoteBtnHtml}
-                            <button class="icon-btn edit" onclick="startEdit('${col}', ${index})" title="重命名">
-                                <svg viewBox="0 0 24 24"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
-                            </button>
+                            ${upBtnHtml}
                             <button class="icon-btn" onclick="deleteTask('${col}', ${index})" title="删除">
                                 <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                             </button>
@@ -444,83 +434,15 @@
             render();
         }
 
-        function handleDragStart(e, col, index) {
-            dragInfo = { col, index };
-            e.dataTransfer.effectAllowed = 'move';
-            setTimeout(() => e.target.classList.add('dragging'), 0);
-        }
-
-        function handleDragOver(e) {
-            e.preventDefault();
-            e.dataTransfer.dropEffect = 'move';
-            const li = e.target.closest('li.task-item');
-            if (li && !li.classList.contains('dragging')) {
-                const rect = li.getBoundingClientRect();
-                const offset = rect.y + (rect.height / 2);
-                if (e.clientY > offset) {
-                    li.style.boxShadow = '0 2px 0 0 var(--burn-color)';
-                } else {
-                    li.style.boxShadow = '0 -2px 0 0 var(--burn-color)';
-                }
-            }
-        }
-
-        function handleDragLeave(e) {
-            const li = e.target.closest('li.task-item');
-            if (li) li.style.boxShadow = 'none';
-        }
-
-        function handleDrop(e, targetCol, targetIndex) {
-            e.preventDefault();
-            e.stopPropagation(); 
-            
-            const li = e.target.closest('li.task-item');
-            let insertIndex = targetIndex;
-
-            if (li) {
-                li.style.boxShadow = 'none';
-                const rect = li.getBoundingClientRect();
-                if (e.clientY > rect.y + (rect.height / 2)) {
-                    insertIndex++;
-                }
-            }
-            executeMove(targetCol, insertIndex);
-        }
-
-        function handleEmptyDrop(e, targetCol) {
-            e.preventDefault();
-            if (e.target.closest('li.task-item')) return; 
-            const targetArr = targetCol === 'front' ? data.front.steps : data.sink;
-            executeMove(targetCol, targetArr.length);
-        }
-
-        function executeMove(targetCol, insertIndex) {
-            if (dragInfo.col === null) return;
-            const sourceCol = dragInfo.col;
-            const sourceIndex = dragInfo.index;
-
-            if (sourceCol === targetCol && sourceIndex === insertIndex) return;
-
-            pushHistory();
-
-            let sourceArr = sourceCol === 'front' ? data.front.steps : data.sink;
-            let targetArr = targetCol === 'front' ? data.front.steps : data.sink;
-
-            const item = sourceArr.splice(sourceIndex, 1)[0];
-
-            if (sourceCol === targetCol && sourceIndex < insertIndex) {
-                insertIndex--;
-            }
-
-            targetArr.splice(insertIndex, 0, item);
-            dragInfo = { col: null, index: null };
+        // 新增：上移逻辑
+        function moveUp(col, index) {
+            if (index === 0) return;
+            pushHistory(); // 上移也是状态变更，支持撤回
+            let arr = col === 'front' ? data.front.steps : data.sink;
+            let temp = arr[index];
+            arr[index] = arr[index - 1];
+            arr[index - 1] = temp;
             render();
-        }
-
-        function handleDragEnd(e) {
-            e.target.classList.remove('dragging');
-            document.querySelectorAll('li.task-item').forEach(el => el.style.boxShadow = 'none');
-            dragInfo = { col: null, index: null };
         }
 
         function saveData() { localStorage.setItem('burnerListData', JSON.stringify(data)); }
@@ -544,8 +466,6 @@
 
         function deleteTask(col, index) {
             pushHistory();
-            
-            // 修复：确保从正确的数组中取值
             let taskName = col === 'front' ? data.front.steps[index].text : data.sink[index].text;
             
             if(col === 'front') data.front.steps.splice(index, 1);
