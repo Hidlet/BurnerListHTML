@@ -83,8 +83,10 @@
         input[type="checkbox"] { margin-top: 5px; margin-right: 15px; cursor: pointer; width: 20px; height: 20px; flex-shrink: 0; } 
         .completed span { text-decoration: line-through; color: var(--text-muted); }
         
+        /* 交互重构：完美的像素对齐 */
         .task-text {
-            flex-grow: 1; cursor: pointer; padding: 2px 6px; margin: -2px -6px; 
+            flex-grow: 1; cursor: pointer; 
+            padding: 4px 8px; margin: -4px -8px; /* 扩展热区 */
             border-radius: 6px; transition: background 0.2s;
         }
         .task-text:hover { background: rgba(0,0,0,0.04); }
@@ -106,10 +108,13 @@
         .add-task-input { border: none; background: transparent; flex-grow: 1; width: 100%; outline: none; font-family: inherit; font-size: 18px; color: var(--text-main); padding: 0; }
         .add-task-input::placeholder { color: var(--text-muted); }
 
+        /* 零跳动编辑框：精确抵消边框像素，拉开右侧间距 */
         .inline-edit-input { 
             flex-grow: 1; width: 100%; font-size: 18px; font-family: inherit; 
             border: 1px solid var(--burn-color); border-radius: 6px; 
-            padding: 6px 12px; outline: none; margin-right: 10px; box-sizing: border-box; transition: box-shadow 0.2s;
+            padding: 3px 7px; /* 3px padding + 1px border = 4px (等同于 task-text 的 padding) */
+            margin: -4px 20px -4px -8px; /* -4px margin (等同于 task-text) + 20px右侧安全距离 */
+            outline: none; box-sizing: border-box; transition: box-shadow 0.2s;
         }
         .inline-edit-input:focus { box-shadow: 0 0 0 2px rgba(231, 76, 60, 0.1); }
 
@@ -159,22 +164,14 @@
            ======================================================== */
         @media (max-width: 850px) {
             body { padding: 15px; height: auto; min-height: 100vh; overflow: auto; }
-            
             .header { flex-direction: column; gap: 20px; align-items: stretch; margin-bottom: 20px; }
             .header-title { justify-content: flex-start; }
-            
             .board { display: flex; flex-direction: column; gap: 20px; min-height: auto; width: 100%; }
             .column { padding: 20px; min-height: auto; } 
-            
-            /* 【修复】：在手机端强制重置宽度缩缩行为，撑满屏幕 */
             #col-back { align-self: stretch; }
-            
             .column-header { flex-direction: column; align-items: flex-start; gap: 15px; height: auto; }
             .header-actions { width: 100%; justify-content: flex-end; }
-
-            /* 触屏适配：将操作按钮默认显示 */
             .action-btns { opacity: 1; }
-            
             .toast-msg { flex-direction: column; gap: 10px; align-items: stretch; text-align: center; font-size: 15px; width: 90vw; box-sizing: border-box; }
             .toast-btn { width: 100%; }
         }
@@ -212,8 +209,10 @@
                 </div>
             </div>
             
-            <input type="text" id="front-title" class="main-project-input" placeholder="【输入当前唯一推进的项目】" oninput="updateTitle('front', this.value)" onkeydown="if(event.key==='Enter') this.blur()">
-            <span class="step-label">项目拆解步骤：</span>
+            <input type="text" id="front-title" class="main-project-input" placeholder="【输入当前唯一推进的项目】" 
+                   oninput="updateTitle('front', this.value)" 
+                   onkeydown="if(event.key==='Enter') this.blur()"
+                   onblur="render()"> <span class="step-label">项目拆解步骤：</span>
             
             <ul id="list-front"></ul>
         </div>
@@ -225,8 +224,10 @@
                     <span>下一个任务</span>
                 </div>
             </div>
-            <input type="text" id="back-title" class="back-project-input" placeholder="输入备选核心项目..." oninput="updateTitle('back', this.value)" onkeydown="if(event.key==='Enter') this.blur()">
-        </div>
+            <input type="text" id="back-title" class="back-project-input" placeholder="输入备选核心项目..." 
+                   oninput="updateTitle('back', this.value)" 
+                   onkeydown="if(event.key==='Enter') this.blur()"
+                   onblur="render()"> </div>
 
         <div class="column" id="col-sink">
             <div class="column-header">
@@ -254,6 +255,8 @@
     </div>
 
     <script>
+        window.isAnimatingMove = false; // 上移动画全局防抖锁
+
         let rawData = localStorage.getItem('burnerListData');
         let oldData = rawData ? JSON.parse(rawData) : null;
         let data = { front: { title: "", steps: [] }, back: { title: "", steps: [] }, sink: [] };
@@ -374,6 +377,9 @@
             ul.innerHTML = '';
             if (!Array.isArray(listData)) return; 
 
+            // 判断备选任务框内是否有内容，若有，则不渲染水槽的“提取”按钮
+            let hasBackContent = data.back.title.trim() !== "";
+
             listData.forEach((task, index) => {
                 const li = document.createElement('li');
                 li.className = `task-item ${task.done ? 'completed' : ''}`;
@@ -392,7 +398,8 @@
                         if(inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
                     }, 0);
                 } else {
-                    let promoteBtnHtml = col === 'sink' ? `<button class="icon-btn promote" onclick="promoteSinkToBack(${index})" title="提取为次要任务"><svg viewBox="0 0 24 24"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg></button>` : '';
+                    // 当作为水槽且下一个任务为空时，才显示拉取箭头
+                    let promoteBtnHtml = (col === 'sink' && !hasBackContent) ? `<button class="icon-btn promote" onclick="promoteSinkToBack(${index})" title="提取为次要任务"><svg viewBox="0 0 24 24"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg></button>` : '';
                     let upBtnHtml = index > 0 ? `<button class="icon-btn up" onclick="moveUp('${col}', ${index})" title="上移一格"><svg viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg></button>` : '';
 
                     li.innerHTML = `
@@ -426,7 +433,6 @@
         function cancelEdit() { editingInfo = { col: null, index: null }; render(); }
         
         function saveEdit(col, index, val) {
-            // 防御性判断：避免因为延时执行导致的越界
             if (editingInfo.index === null) return;
             if (val.trim() !== '') {
                 pushHistory();
@@ -438,7 +444,6 @@
             render();
         }
 
-        // ====== 修改：点击屏幕/图标即可保存，无需强求回车键 ======
         function addStep(col, inputEl) {
             let val = inputEl.value.trim();
             if(val) {
@@ -451,22 +456,64 @@
         }
 
         function handleEnter(event, col, inputEl) {
-            // 完全抛弃229判断，只要按下的是Enter就执行
             if (event.key === 'Enter') {
                 event.preventDefault();
-                // 解决输入法冲突：延时剥离执行环境
                 setTimeout(() => addStep(col, inputEl), 0);
             }
         }
 
+        // ================= 新增：拥有平滑交叉动效的上移逻辑 =================
         function moveUp(col, index) {
-            if (index === 0) return;
-            pushHistory(); 
-            let arr = col === 'front' ? data.front.steps : data.sink;
-            let temp = arr[index];
-            arr[index] = arr[index - 1];
-            arr[index - 1] = temp;
-            render();
+            if (index === 0 || window.isAnimatingMove) return;
+            window.isAnimatingMove = true;
+
+            const ul = document.getElementById(`list-${col}`);
+            const items = ul.querySelectorAll('li.task-item');
+            const currentEl = items[index];
+            const prevEl = items[index - 1];
+
+            if (!currentEl || !prevEl) {
+                window.isAnimatingMove = false;
+                return;
+            }
+
+            // 计算两者之间的精确距离
+            const currentRect = currentEl.getBoundingClientRect();
+            const prevRect = prevEl.getBoundingClientRect();
+            const offset = prevRect.top - currentRect.top;
+
+            // 设置平滑贝塞尔曲线动画
+            currentEl.style.transition = 'transform 0.25s cubic-bezier(0.4, 0, 0.2, 1)';
+            prevEl.style.transition = 'transform 0.25s cubic-bezier(0.4, 0, 0.2, 1)';
+            
+            // 提升移动元素的层级，使其浮在上方滑动
+            currentEl.style.zIndex = '2';
+            currentEl.style.position = 'relative';
+
+            // 触发位移交叉
+            currentEl.style.transform = `translateY(${offset}px)`;
+            prevEl.style.transform = `translateY(${-offset}px)`;
+
+            pushHistory(); // 记录撤销快照
+
+            // 等待动画结束，更新底层数据并重绘
+            setTimeout(() => {
+                let arr = col === 'front' ? data.front.steps : data.sink;
+                let temp = arr[index];
+                arr[index] = arr[index - 1];
+                arr[index - 1] = temp;
+                
+                // 清理内联样式，防污染
+                currentEl.style.transition = '';
+                prevEl.style.transition = '';
+                currentEl.style.transform = '';
+                prevEl.style.transform = '';
+                currentEl.style.zIndex = '';
+                currentEl.style.position = '';
+
+                window.isAnimatingMove = false;
+                render();
+            }, 250);
         }
 
         function saveData() { localStorage.setItem('burnerListData', JSON.stringify(data)); }
