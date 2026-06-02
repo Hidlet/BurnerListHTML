@@ -76,22 +76,48 @@
 
         li.task-item { 
             display: flex; align-items: flex-start; margin-bottom: 8px; padding: 6px 0;
-            font-size: 18px; line-height: 1.5; word-break: break-all; 
-            border-radius: 6px; transition: background 0.2s;
+            font-size: 18px; border-radius: 6px; transition: background 0.2s;
         } 
         
-        input[type="checkbox"] { margin-top: 5px; margin-right: 15px; cursor: pointer; width: 20px; height: 20px; flex-shrink: 0; } 
+        input[type="checkbox"] { margin-top: 6px; margin-right: 15px; cursor: pointer; width: 20px; height: 20px; flex-shrink: 0; } 
         .completed span { text-decoration: line-through; color: var(--text-muted); }
         
-        /* 交互重构：完美的像素对齐 */
+        /* 【像素级重构：零跳动布局】
+           通过赋予普通文本一个 1px 的透明边框，让它的物理尺寸和包含红色边框的 input 绝对一致。
+           增加 margin-right: 12px，彻底解决阴影和右侧按钮挤在一起的问题。
+        */
         .task-text {
-            flex-grow: 1; cursor: pointer; 
-            padding: 4px 8px; margin: -4px -8px; /* 扩展热区 */
-            border-radius: 6px; transition: background 0.2s;
+            flex-grow: 1; 
+            cursor: pointer; 
+            padding: 4px 8px; 
+            margin: -4px 12px -4px -4px; /* 右侧安全距离 12px */
+            border: 1px solid transparent; /* 关键：占位防抖动 */
+            border-radius: 6px; 
+            transition: background 0.2s;
+            box-sizing: border-box;
+            word-break: break-all;
+            line-height: 1.5;
         }
         .task-text:hover { background: rgba(0,0,0,0.04); }
 
-        .action-btns { margin-left: auto; display: flex; gap: 8px; opacity: 0; transition: opacity 0.2s; }
+        .inline-edit-input { 
+            flex-grow: 1; 
+            width: 10px; /* 交给 flex-grow 撑开，防止溢出 */
+            font-size: 18px; 
+            font-family: inherit; 
+            border: 1px solid var(--burn-color); 
+            border-radius: 6px; 
+            padding: 4px 8px; /* 内边距与文本绝对一致 */
+            margin: -4px 12px -4px -4px; /* 外边距与文本绝对一致 */
+            outline: none; 
+            box-sizing: border-box; 
+            transition: box-shadow 0.2s;
+            line-height: 1.5;
+            background: #fff;
+        }
+        .inline-edit-input:focus { box-shadow: 0 0 0 2px rgba(231, 76, 60, 0.1); }
+
+        .action-btns { margin-left: auto; display: flex; gap: 8px; opacity: 0; transition: opacity 0.2s; align-items: center; }
         li.task-item:hover .action-btns { opacity: 1; }
 
         .icon-btn { background: none; border: none; cursor: pointer; color: var(--text-muted); display: flex; align-items: center; padding: 2px; transition: color 0.2s; }
@@ -105,18 +131,8 @@
         .add-task-wrap:hover, .add-task-wrap:focus-within { opacity: 1; }
         .add-icon { width: 22px; height: 22px; margin-right: 15px; stroke: currentColor; stroke-width: 2; color: var(--text-muted); flex-shrink: 0; cursor: pointer; transition: color 0.2s; }
         .add-icon:hover { color: var(--burn-color); }
-        .add-task-input { border: none; background: transparent; flex-grow: 1; width: 100%; outline: none; font-family: inherit; font-size: 18px; color: var(--text-main); padding: 0; }
+        .add-task-input { border: none; background: transparent; flex-grow: 1; width: 100%; outline: none; font-family: inherit; font-size: 18px; color: var(--text-main); padding: 0; line-height: 1.5; }
         .add-task-input::placeholder { color: var(--text-muted); }
-
-        /* 零跳动编辑框：精确抵消边框像素，拉开右侧间距 */
-        .inline-edit-input { 
-            flex-grow: 1; width: 100%; font-size: 18px; font-family: inherit; 
-            border: 1px solid var(--burn-color); border-radius: 6px; 
-            padding: 3px 7px; /* 3px padding + 1px border = 4px (等同于 task-text 的 padding) */
-            margin: -4px 20px -4px -8px; /* -4px margin (等同于 task-text) + 20px右侧安全距离 */
-            outline: none; box-sizing: border-box; transition: box-shadow 0.2s;
-        }
-        .inline-edit-input:focus { box-shadow: 0 0 0 2px rgba(231, 76, 60, 0.1); }
 
         /* ======== 撤回提示 Toast ======== */
         .toast-container {
@@ -212,7 +228,8 @@
             <input type="text" id="front-title" class="main-project-input" placeholder="【输入当前唯一推进的项目】" 
                    oninput="updateTitle('front', this.value)" 
                    onkeydown="if(event.key==='Enter') this.blur()"
-                   onblur="render()"> <span class="step-label">项目拆解步骤：</span>
+                   onblur="render()"> 
+            <span class="step-label">项目拆解步骤：</span>
             
             <ul id="list-front"></ul>
         </div>
@@ -227,7 +244,8 @@
             <input type="text" id="back-title" class="back-project-input" placeholder="输入备选核心项目..." 
                    oninput="updateTitle('back', this.value)" 
                    onkeydown="if(event.key==='Enter') this.blur()"
-                   onblur="render()"> </div>
+                   onblur="render()"> 
+        </div>
 
         <div class="column" id="col-sink">
             <div class="column-header">
@@ -255,7 +273,7 @@
     </div>
 
     <script>
-        window.isAnimatingMove = false; // 上移动画全局防抖锁
+        window.isAnimatingMove = false;
 
         let rawData = localStorage.getItem('burnerListData');
         let oldData = rawData ? JSON.parse(rawData) : null;
@@ -377,7 +395,6 @@
             ul.innerHTML = '';
             if (!Array.isArray(listData)) return; 
 
-            // 判断备选任务框内是否有内容，若有，则不渲染水槽的“提取”按钮
             let hasBackContent = data.back.title.trim() !== "";
 
             listData.forEach((task, index) => {
@@ -386,32 +403,37 @@
                 
                 const isEditing = (editingInfo.col === col && editingInfo.index === index);
 
+                // 公共的右侧按钮区域（通过可见性控制布局，保证零跳动）
+                let promoteBtnHtml = (col === 'sink' && !hasBackContent) ? `<button class="icon-btn promote" onclick="promoteSinkToBack(${index})" title="提取为次要任务"><svg viewBox="0 0 24 24"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg></button>` : '';
+                let upBtnHtml = index > 0 ? `<button class="icon-btn up" onclick="moveUp('${col}', ${index})" title="上移一格"><svg viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg></button>` : '';
+                
+                let actionBtnsHtml = `
+                    <div class="action-btns" ${isEditing ? 'style="visibility: hidden;"' : ''}>
+                        ${promoteBtnHtml}
+                        ${upBtnHtml}
+                        <button class="icon-btn" onclick="deleteTask('${col}', ${index})" title="删除">
+                            <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                        </button>
+                    </div>
+                `;
+
                 if (isEditing) {
                     li.innerHTML = `
-                        <input type="checkbox" ${task.done ? 'checked' : ''} disabled style="opacity:0.5; margin-top: 10px;">
+                        <input type="checkbox" ${task.done ? 'checked' : ''} disabled style="opacity:0.5; margin-top: 6px;">
                         <input type="text" class="inline-edit-input" value="${task.text}"
                             onblur="setTimeout(() => saveEdit('${col}', ${index}, this.value), 150)"
                             onkeydown="if(event.key==='Enter') { this.blur(); } else if(event.key==='Escape') { cancelEdit(); }">
+                        ${actionBtnsHtml}
                     `;
                     setTimeout(() => {
                         const inp = li.querySelector('.inline-edit-input');
                         if(inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
                     }, 0);
                 } else {
-                    // 当作为水槽且下一个任务为空时，才显示拉取箭头
-                    let promoteBtnHtml = (col === 'sink' && !hasBackContent) ? `<button class="icon-btn promote" onclick="promoteSinkToBack(${index})" title="提取为次要任务"><svg viewBox="0 0 24 24"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg></button>` : '';
-                    let upBtnHtml = index > 0 ? `<button class="icon-btn up" onclick="moveUp('${col}', ${index})" title="上移一格"><svg viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg></button>` : '';
-
                     li.innerHTML = `
                         <input type="checkbox" ${task.done ? 'checked' : ''} onchange="toggleTask('${col}', ${index})">
                         <span class="task-text" onclick="startEdit('${col}', ${index})" title="点击编辑">${task.text}</span>
-                        <div class="action-btns">
-                            ${promoteBtnHtml}
-                            ${upBtnHtml}
-                            <button class="icon-btn" onclick="deleteTask('${col}', ${index})" title="删除">
-                                <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                            </button>
-                        </div>
+                        ${actionBtnsHtml}
                     `;
                 }
                 ul.appendChild(li);
@@ -462,7 +484,7 @@
             }
         }
 
-        // ================= 新增：拥有平滑交叉动效的上移逻辑 =================
+        // ================= 【核心修复】：基于 Reflow 强制触发的物理层面上移动画 =================
         function moveUp(col, index) {
             if (index === 0 || window.isAnimatingMove) return;
             window.isAnimatingMove = true;
@@ -477,33 +499,36 @@
                 return;
             }
 
-            // 计算两者之间的精确距离
+            // 计算物理高度差（包含行高不一致的情况也能完美处理）
             const currentRect = currentEl.getBoundingClientRect();
             const prevRect = prevEl.getBoundingClientRect();
-            const offset = prevRect.top - currentRect.top;
+            const offset = prevRect.top - currentRect.top; 
 
-            // 设置平滑贝塞尔曲线动画
+            // 1. 初始化 transform 为 0，并强制浏览器重绘 (Reflow)
+            currentEl.style.transform = 'translateY(0px)';
+            prevEl.style.transform = 'translateY(0px)';
+            currentEl.offsetHeight; 
+
+            // 2. 赋予贝塞尔曲线动画并拔高当前元素的层级
             currentEl.style.transition = 'transform 0.25s cubic-bezier(0.4, 0, 0.2, 1)';
             prevEl.style.transition = 'transform 0.25s cubic-bezier(0.4, 0, 0.2, 1)';
-            
-            // 提升移动元素的层级，使其浮在上方滑动
             currentEl.style.zIndex = '2';
             currentEl.style.position = 'relative';
 
-            // 触发位移交叉
+            // 3. 执行动画
             currentEl.style.transform = `translateY(${offset}px)`;
             prevEl.style.transform = `translateY(${-offset}px)`;
 
-            pushHistory(); // 记录撤销快照
+            pushHistory(); 
 
-            // 等待动画结束，更新底层数据并重绘
+            // 4. 动画结束后真正交换底层数据
             setTimeout(() => {
                 let arr = col === 'front' ? data.front.steps : data.sink;
                 let temp = arr[index];
                 arr[index] = arr[index - 1];
                 arr[index - 1] = temp;
                 
-                // 清理内联样式，防污染
+                // 卸载样式，回归原始状态
                 currentEl.style.transition = '';
                 prevEl.style.transition = '';
                 currentEl.style.transform = '';
