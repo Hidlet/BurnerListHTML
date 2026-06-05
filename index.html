@@ -339,8 +339,11 @@
                     }
                 }
             }
+			if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+                e.preventDefault(); 
+            }
         });
-
+			
         function showModalConfig(title, message, isAlert, callback) {
             document.getElementById('modal-title-text').innerText = title;
             document.getElementById('modal-message-text').innerText = message;
@@ -387,6 +390,21 @@
             renderList('front', data.front.steps);
             renderList('sink', data.sink);
             saveData();
+
+            // 【新增】处理连续输入时的自动获取焦点
+            if (window.focusTarget) {
+                if (window.focusTarget.type === 'add') {
+                    const ul = document.getElementById(`list-${window.focusTarget.col}`);
+                    if (ul) {
+                        const addInputs = ul.querySelectorAll('.add-task-input');
+                        if (addInputs.length > 0) {
+                            const lastAddInput = addInputs[addInputs.length - 1];
+                            setTimeout(() => lastAddInput.focus(), 0);
+                        }
+                    }
+                }
+                window.focusTarget = null;
+            }
         }
 
         function renderList(col, listData) {
@@ -421,8 +439,8 @@
                     li.innerHTML = `
                         <input type="checkbox" ${task.done ? 'checked' : ''} disabled style="opacity:0.5; margin-top: 6px;">
                         <input type="text" class="inline-edit-input" value="${task.text}"
-                            onblur="setTimeout(() => saveEdit('${col}', ${index}, this.value), 150)"
-                            onkeydown="if(event.key==='Enter') { this.blur(); } else if(event.key==='Escape') { cancelEdit(); }">
+                            onblur="setTimeout(() => { if(editingInfo.index === ${index}) saveEdit('${col}', ${index}, this.value); }, 150)"
+                            onkeydown="handleEditKeydown(event, '${col}', ${index}, this)">
                         ${actionBtnsHtml}
                     `;
                     setTimeout(() => {
@@ -430,6 +448,7 @@
                         if(inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
                     }, 0);
                 } else {
+                    // ... [保持原有 else 分支不变]
                     li.innerHTML = `
                         <input type="checkbox" ${task.done ? 'checked' : ''} onchange="toggleTask('${col}', ${index})">
                         <span class="task-text" onclick="startEdit('${col}', ${index})" title="点击编辑">${task.text}</span>
@@ -446,41 +465,76 @@
                 <svg class="add-icon" onclick="addStep('${col}', this.nextElementSibling)" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                 <input type="text" class="add-task-input" placeholder="${addPlaceholder}" 
                        onkeydown="handleEnter(event, '${col}', this)" 
-                       onblur="setTimeout(() => addStep('${col}', this), 150)">
+                       onblur="setTimeout(() => addStep('${col}', this, false), 150)">
             `;
             ul.appendChild(addWrap);
         }
 
         function startEdit(col, index) { editingInfo = { col, index }; render(); }
         function cancelEdit() { editingInfo = { col: null, index: null }; render(); }
-        
-        function saveEdit(col, index, val) {
-            if (editingInfo.index === null) return;
+
+		// 【新增】处理编辑状态下的键盘事件
+        function handleEditKeydown(event, col, index, inputEl) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                saveEdit(col, index, inputEl.value, true); // true 表示执行后跳向下一个
+            } else if (event.key === 'Escape') {
+                cancelEdit();
+            }
+        }
+
+        // 【修改】增强版保存编辑，支持回车跳转
+        function saveEdit(col, index, val, moveToNext = false) {
+            if (editingInfo.index !== index) return; // 防止回车和失去焦点(blur)双重触发
+            
             if (val.trim() !== '') {
                 pushHistory();
                 let arr = col === 'front' ? data.front.steps : data.sink;
-                arr[index].text = val.trim();
-                saveData();
+                if (arr[index].text !== val.trim()) {
+                    arr[index].text = val.trim();
+                    saveData();
+                }
             }
-            editingInfo = { col: null, index: null };
+            
+            let arr = col === 'front' ? data.front.steps : data.sink;
+            if (moveToNext) {
+                if (index + 1 < arr.length) {
+                    editingInfo = { col: col, index: index + 1 }; // 跳转到下一个任务的编辑框
+                } else {
+                    editingInfo = { col: null, index: null };
+                    window.focusTarget = { type: 'add', col: col }; // 到底部了，自动跳转到新增框
+                }
+            } else {
+                editingInfo = { col: null, index: null }; // 正常失去焦点，退出编辑态
+            }
             render();
         }
 
-        function addStep(col, inputEl) {
+        // 【修改】支持识别来源的输入事件
+        function handleEnter(event, col, inputEl) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                setTimeout(() => addStep(col, inputEl, true), 0);
+            }
+        }
+
+        // 【修改】支持回车连续输入的添加任务方法
+        function addStep(col, inputEl, isEnter = false) {
             let val = inputEl.value.trim();
             if(val) {
                 pushHistory();
                 if (col === 'front') data.front.steps.push({ text: val, done: false });
                 if (col === 'sink') data.sink.push({ text: val, done: false });
                 inputEl.value = '';
-                render();
             }
-        }
-
-        function handleEnter(event, col, inputEl) {
-            if (event.key === 'Enter') {
-                event.preventDefault();
-                setTimeout(() => addStep(col, inputEl), 0);
+            
+            // 如果是通过按回车调用的，将焦点预定为当前列的新增输入框
+            if (isEnter) {
+                window.focusTarget = { type: 'add', col: col };
+                render();
+            } else if (val) {
+                // 如果是失去焦点触发的，但里面有值，则渲染保存即可，不锁死焦点
+                render();
             }
         }
 
